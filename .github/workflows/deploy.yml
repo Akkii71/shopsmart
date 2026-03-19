@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend-deploy:
-    name: Backend Deploy to ECS
+    name: Backend Deploy to EC2
     runs-on: ubuntu-latest
     environment: production
 
@@ -16,53 +16,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Deploy to EC2 using SSH
+        uses: appleboy/ssh-action@v1.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        working-directory: ./server
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
-
-      # - name: Run DB Migrations
-      #   working-directory: ./server
-      #   env:
-      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      #   run: npm run migrate:production
-
-      - name: Download ECS task definition
-        run: |
-          aws ecs describe-task-definition --task-definition ${{ secrets.ECS_TASK_DEFINITION }} --query taskDefinition > task-definition.json
-
-      - name: Fill in the new image ID in the ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: backend-container
-          image: ${{ env.IMAGE }}
-
-      - name: Deploy to Amazon ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ secrets.ECS_SERVICE }}
-          cluster: ${{ secrets.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Idempotent directory setup
+            mkdir -p ~/shopsmart
+            cd ~/shopsmart
+            
+            # Pull repository updates (assuming git is active)
+            # Otherwise you would use rsync steps prior to this SSH action
+            if [ ! -d .git ]; then
+              git init
+              git remote add origin https://github.com/${{ github.repository }}.git
+            fi
+            
+            # Idempotently grab the latest code
+            git fetch --all
+            git reset --hard origin/main
+            
+            cd server
+            npm ci --production
+            
+            # Setup pm2 if not existing
+            if ! command -v pm2 &> /dev/null; then
+              npm install -g pm2
+            fi
+            
+            # Safely start or restart the Node runtime idempotently
+            pm2 restart shopsmart-server || pm2 start app.js --name shopsmart-server
+            pm2 save
 
   frontend-deploy:
     name: Frontend Deploy to S3 + CloudFront
