@@ -3,10 +3,38 @@ import { useState, useEffect } from 'react';
 import './index.css';
 
 const products = [
-  { id: 1, name: 'Premium Wireless Headphones', price: '$299', category: 'Audio', image: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&q=80&w=400' },
-  { id: 2, name: 'Smart Fitness Watch', price: '$199', category: 'Wearables', image: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&q=80&w=400' },
-  { id: 3, name: 'Ultra HD 4K Monitor', price: '$499', category: 'Displays', image: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=400' },
-  { id: 4, name: 'Mechanical Keyboard Pro', price: '$149', category: 'Accessories', image: 'https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&q=80&w=400' }
+  {
+    id: 1,
+    name: 'Premium Wireless Headphones',
+    price: '$299',
+    category: 'Audio',
+    image:
+      'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 2,
+    name: 'Smart Fitness Watch',
+    price: '$199',
+    category: 'Wearables',
+    image:
+      'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 3,
+    name: 'Ultra HD 4K Monitor',
+    price: '$499',
+    category: 'Displays',
+    image:
+      'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=400',
+  },
+  {
+    id: 4,
+    name: 'Mechanical Keyboard Pro',
+    price: '$149',
+    category: 'Accessories',
+    image:
+      'https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&q=80&w=400',
+  },
 ];
 
 function App() {
@@ -15,9 +43,9 @@ function App() {
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || '';
     fetch(`${apiUrl}/api/health`)
-      .then(res => res.json())
-      .then(data => setData(data))
-      .catch(err => console.error('Error fetching health check:', err));
+      .then((res) => res.json())
+      .then((data) => setData(data))
+      .catch((err) => console.error('Error fetching health check:', err));
   }, []);
 
   return (
@@ -32,7 +60,11 @@ function App() {
           <a href="#discover">Discover</a>
           <a href="#categories">Categories</a>
           <div className="status-badge">
-            {data ? <span className="online">● System Online</span> : <span className="offline">● Booting up</span>}
+            {data ? (
+              <span className="online">● System Online</span>
+            ) : (
+              <span className="offline">● Booting up</span>
+            )}
           </div>
         </div>
       </nav>
@@ -40,8 +72,13 @@ function App() {
       {/* Hero Section */}
       <header className="hero">
         <div className="hero-content">
-          <h1 className="hero-title">Future of <span className="gradient-text">Shopping</span></h1>
-          <p className="hero-subtitle">Discover premium tech with an elegant, streamlined checkout experience.</p>
+          <h1 className="hero-title">
+            Future of <span className="gradient-text">Shopping</span>
+          </h1>
+          <p className="hero-subtitle">
+            Discover premium tech with an elegant, streamlined checkout
+            experience.
+          </p>
           <button className="primary-btn">Explore Collection</button>
         </div>
       </header>
@@ -52,7 +89,7 @@ function App() {
           <h2>Trending Devices</h2>
           <button className="text-btn">View All →</button>
         </div>
-        
+
         <div className="product-grid">
           {products.map((product) => (
             <div className="product-card" key={product.id}>

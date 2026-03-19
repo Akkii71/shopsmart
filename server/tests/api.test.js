@@ -7,7 +7,7 @@ app.use(express.json());
 
 // Dummy DB object for integration simulation
 const db = {
-  query: jest.fn().mockResolvedValue({ rowCount: 1 })
+  query: jest.fn().mockResolvedValue({ rowCount: 1 }),
 };
 
 app.get('/api/health', (req, res) => {
@@ -25,7 +25,6 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 describe('Backend API Tests', () => {
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -40,15 +39,20 @@ describe('Backend API Tests', () => {
 
   describe('Integration Testing', () => {
     it('should correctly integrate the API route with the simulated Database dependency', async () => {
-      const response = await request(app).post('/api/checkout').send({ id: 101 });
-      
+      const response = await request(app)
+        .post('/api/checkout')
+        .send({ id: 101 });
+
       // Ensure the HTTP route successfully interacts with the backend logic
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Order created via DB integration');
-      
+
       // Verify DB interaction explicitly
       expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query).toHaveBeenCalledWith('INSERT INTO orders (id) VALUES ($1)', [101]);
+      expect(db.query).toHaveBeenCalledWith(
+        'INSERT INTO orders (id) VALUES ($1)',
+        [101],
+      );
     });
   });
 });
