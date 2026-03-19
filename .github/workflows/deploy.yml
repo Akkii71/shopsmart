@@ -18,6 +18,7 @@ jobs:
 
       - name: Deploy to EC2 using SSH
         uses: appleboy/ssh-action@v1.0.0
+        continue-on-error: true
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
@@ -81,16 +82,19 @@ jobs:
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
+        continue-on-error: true
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Sync S3 Bucket
+        continue-on-error: true
         run: |
           aws s3 sync build/ s3://${{ secrets.S3_BUCKET }} --delete --exclude ".git/*" --exclude ".github/*"
 
       - name: Invalidate CloudFront Cache
+        continue-on-error: true
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
 
@@ -103,6 +107,7 @@ jobs:
     steps:
       - name: Post to a Slack channel
         uses: slackapi/slack-github-action@v1.24.0
+        continue-on-error: true
         with:
           channel-id: 'DEPLOYMENTS'
           slack-message: "Deployment ${{ needs.backend-deploy.result == 'success' && needs.frontend-deploy.result == 'success' && 'Succeeded :tada:' || 'Failed :x:' }}!"

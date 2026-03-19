@@ -41,7 +41,7 @@ function App() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || '';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     fetch(`${apiUrl}/api/health`)
       .then((res) => res.json())
       .then((data) => setData(data))
