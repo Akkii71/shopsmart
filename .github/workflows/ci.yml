@@ -1,0 +1,88 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x]
+        
+    defaults:
+      run:
+        working-directory: ./client
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Jest tests with coverage
+        run: npm test -- --coverage
+
+      - name: Upload Frontend Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: client/coverage/
+          retention-days: 7
+
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x]
+        
+    defaults:
+      run:
+        working-directory: ./server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: './server/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Jest tests with coverage
+        run: npm test -- --coverage
+
+      - name: Upload Backend Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: server/coverage/
+          retention-days: 7

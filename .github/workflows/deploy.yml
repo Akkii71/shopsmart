@@ -1,0 +1,135 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  backend-deploy:
+    name: Backend Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./server
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+      # - name: Run DB Migrations
+      #   working-directory: ./server
+      #   env:
+      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      #   run: npm run migrate:production
+
+      - name: Download ECS task definition
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ secrets.ECS_TASK_DEFINITION }} --query taskDefinition > task-definition.json
+
+      - name: Fill in the new image ID in the ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: backend-container
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE }}
+          cluster: ${{ secrets.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+  frontend-deploy:
+    name: Frontend Deploy to S3 + CloudFront
+    runs-on: ubuntu-latest
+    environment: production
+    needs: backend-deploy
+
+    defaults:
+      run:
+        working-directory: ./client
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+        env:
+          REACT_APP_API_URL: ${{ secrets.FRONTEND_API_URL }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync S3 Bucket
+        run: |
+          aws s3 sync build/ s3://${{ secrets.S3_BUCKET }} --delete --exclude ".git/*" --exclude ".github/*"
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+
+  notify:
+    name: Notification via Slack & GitHub Summary
+    runs-on: ubuntu-latest
+    needs: [backend-deploy, frontend-deploy]
+    if: always()
+
+    steps:
+      - name: Post to a Slack channel
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'DEPLOYMENTS'
+          slack-message: "Deployment ${{ needs.backend-deploy.result == 'success' && needs.frontend-deploy.result == 'success' && 'Succeeded :tada:' || 'Failed :x:' }}!"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Print Job Results to Job Summary
+        run: |
+          echo "## Deployment Status 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend Deploy:** ${{ needs.backend-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend Deploy:** ${{ needs.frontend-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.backend-deploy.result }}" == "success" ] && [ "${{ needs.frontend-deploy.result }}" == "success" ]; then
+            echo "✅ **All systems successfully deployed!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment failed! Check the logs above.**" >> $GITHUB_STEP_SUMMARY
+          fi
