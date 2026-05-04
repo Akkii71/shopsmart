@@ -48,7 +48,7 @@ jobs:
             fi
             
             # Safely start or restart the Node runtime idempotently
-            pm2 restart shopsmart-server || pm2 start app.js --name shopsmart-server
+            pm2 restart shopsmart-server || pm2 start src/index.js --name shopsmart-server
             pm2 save
 
   frontend-deploy:
@@ -78,7 +78,7 @@ jobs:
       - name: Build Frontend
         run: npm run build
         env:
-          REACT_APP_API_URL: ${{ secrets.FRONTEND_API_URL }}
+          VITE_API_URL: ${{ secrets.FRONTEND_API_URL }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -91,7 +91,7 @@ jobs:
       - name: Sync S3 Bucket
         continue-on-error: true
         run: |
-          aws s3 sync build/ s3://${{ secrets.S3_BUCKET }} --delete --exclude ".git/*" --exclude ".github/*"
+          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }} --delete --exclude ".git/*" --exclude ".github/*"
 
       - name: Invalidate CloudFront Cache
         continue-on-error: true
