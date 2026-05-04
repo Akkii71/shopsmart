@@ -55,7 +55,10 @@ function App() {
   const handleCheckout = () => {
     if (cart.length === 0) return;
 
-    const items = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+    const items = cart.map((item) => ({
+      id: item.id,
+      quantity: item.quantity,
+    }));
 
     fetch(`${apiUrl}/api/checkout`, {
       method: 'POST',
@@ -94,7 +97,8 @@ function App() {
             onClick={() => setCartOpen(!cartOpen)}
             aria-label="Open cart"
           >
-            Cart {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
+            Cart{' '}
+            {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
           </button>
         </div>
       </nav>

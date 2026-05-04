@@ -2,13 +2,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 beforeEach(() => {
   mockFetch
     .mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ status: 'ok', message: 'ShopSmart Backend is running' }),
+      json: async () => ({
+        status: 'ok',
+        message: 'ShopSmart Backend is running',
+      }),
     })
     .mockResolvedValueOnce({
       ok: true,
