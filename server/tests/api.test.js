@@ -1,58 +1,63 @@
 const request = require('supertest');
-const express = require('express');
-
-// Setting up a simple mock server for testing
-const app = express();
-app.use(express.json());
-
-// Dummy DB object for integration simulation
-const db = {
-  query: jest.fn().mockResolvedValue({ rowCount: 1 }),
-};
-
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
-app.post('/api/checkout', async (req, res) => {
-  try {
-    // Integrating DB logic into the API handler
-    await db.query('INSERT INTO orders (id) VALUES ($1)', [req.body.id]);
-    res.status(201).json({ message: 'Order created via DB integration' });
-  } catch (err) {
-    res.status(500).json({ error: 'DB failure' });
-  }
-});
+const app = require('../src/app');
 
 describe('Backend API Tests', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe('Unit Testing', () => {
-    it('should return 200 OK from the basic health check endpoint safely', async () => {
-      const response = await request(app).get('/api/health');
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe('ok');
+  describe('Health Check', () => {
+    it('GET /api/health returns 200 with status ok', async () => {
+      const res = await request(app).get('/api/health');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ok');
+      expect(res.body.message).toBe('ShopSmart Backend is running');
     });
   });
 
-  describe('Integration Testing', () => {
-    it('should correctly integrate the API route with the simulated Database dependency', async () => {
-      const response = await request(app)
+  describe('Products API', () => {
+    it('GET /api/products returns all products', async () => {
+      const res = await request(app).get('/api/products');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+    });
+
+    it('GET /api/products?category=Audio filters by category', async () => {
+      const res = await request(app).get('/api/products?category=Audio');
+      expect(res.status).toBe(200);
+      expect(res.body.every((p) => p.category === 'Audio')).toBe(true);
+    });
+
+    it('GET /api/products/:id returns the correct product', async () => {
+      const res = await request(app).get('/api/products/1');
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(1);
+      expect(res.body.name).toBeDefined();
+    });
+
+    it('GET /api/products/:id returns 404 for unknown product', async () => {
+      const res = await request(app).get('/api/products/9999');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('Product not found');
+    });
+  });
+
+  describe('Checkout API', () => {
+    it('POST /api/checkout places an order and returns orderId + total', async () => {
+      const res = await request(app)
         .post('/api/checkout')
-        .send({ id: 101 });
+        .send({ items: [{ id: 1, quantity: 2 }] });
+      expect(res.status).toBe(201);
+      expect(res.body.message).toBe('Order placed successfully');
+      expect(res.body.orderId).toBeDefined();
+      expect(res.body.total).toBe(598);
+    });
 
-      // Ensure the HTTP route successfully interacts with the backend logic
-      expect(response.status).toBe(201);
-      expect(response.body.message).toBe('Order created via DB integration');
+    it('POST /api/checkout returns 400 for empty items array', async () => {
+      const res = await request(app).post('/api/checkout').send({ items: [] });
+      expect(res.status).toBe(400);
+    });
 
-      // Verify DB interaction explicitly
-      expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query).toHaveBeenCalledWith(
-        'INSERT INTO orders (id) VALUES ($1)',
-        [101],
-      );
+    it('POST /api/checkout returns 400 when items field is missing', async () => {
+      const res = await request(app).post('/api/checkout').send({});
+      expect(res.status).toBe(400);
     });
   });
 });
