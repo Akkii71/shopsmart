@@ -14,11 +14,11 @@ jobs:
   frontend-ci:
     name: Frontend CI
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [18.x]
-        
+
     defaults:
       run:
         working-directory: ./client
@@ -43,25 +43,28 @@ jobs:
       - name: Run Prettier check
         run: npm run format:check
 
-      - name: Run Jest tests with coverage
-        run: npm test -- --coverage
+      # Phase 1 — Testing: unit tests + coverage + junit report
+      - name: Run tests with coverage and generate report
+        run: npm test -- --coverage --run
 
-      - name: Upload Frontend Coverage Report
+      - name: Upload Phase 1 test reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: frontend-coverage
-          path: client/coverage/
+          name: frontend-test-reports
+          path: |
+            client/reports/
+            client/coverage/
           retention-days: 7
 
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [18.x]
-        
+
     defaults:
       run:
         working-directory: ./server
@@ -86,13 +89,16 @@ jobs:
       - name: Run Prettier check
         run: npm run format:check
 
-      - name: Run Jest tests with coverage
-        run: npm test -- --coverage
+      # Phase 1 — Testing: unit + integration tests with json report
+      - name: Run tests with coverage and generate report
+        run: npm test -- --coverage --json --outputFile=reports/test-results.json
 
-      - name: Upload Backend Coverage Report
+      - name: Upload Phase 1 test reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backend-coverage
-          path: server/coverage/
+          name: backend-test-reports
+          path: |
+            server/reports/
+            server/coverage/
           retention-days: 7
