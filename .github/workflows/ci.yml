@@ -91,7 +91,7 @@ jobs:
 
       # Phase 1 — Testing: unit + integration tests with json report
       - name: Run tests with coverage and generate report
-        run: npm test -- --coverage --json --outputFile=reports/test-results.json
+        run: mkdir -p reports && npm test -- --coverage --json --outputFile=reports/test-results.json
 
       - name: Upload Phase 1 test reports
         uses: actions/upload-artifact@v4
