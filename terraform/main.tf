@@ -1,6 +1,13 @@
+# Fetch current AWS account ID for unique bucket naming
+data "aws_caller_identity" "current" {}
+
+locals {
+  bucket_name = "shopsmart-frontend-${data.aws_caller_identity.current.account_id}"
+}
+
 # S3 Bucket
 resource "aws_s3_bucket" "frontend" {
-  bucket = var.bucket_name
+  bucket = local.bucket_name
 
   tags = {
     Name        = "ShopSmart Frontend"
