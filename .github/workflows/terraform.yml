@@ -43,6 +43,62 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Import existing AWS resources
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="shopsmart-frontend-${ACCOUNT_ID}"
+
+          # S3 resources
+          terraform import aws_s3_bucket.frontend "$BUCKET" || true
+          terraform import aws_s3_bucket_versioning.frontend "$BUCKET" || true
+          terraform import aws_s3_bucket_server_side_encryption_configuration.frontend "$BUCKET" || true
+          terraform import aws_s3_bucket_public_access_block.frontend "$BUCKET" || true
+
+          # ECR repository
+          terraform import aws_ecr_repository.backend shopsmart-backend || true
+
+          # CloudWatch log group
+          terraform import aws_cloudwatch_log_group.backend /ecs/shopsmart-backend || true
+
+          # Security group (look up by name and VPC)
+          SG_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=shopsmart-backend-sg" \
+            --query "SecurityGroups[0].GroupId" \
+            --output text --region "$AWS_REGION" 2>/dev/null || echo "")
+          if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+            terraform import aws_security_group.backend "$SG_ID" || true
+          fi
+
+          # ECS cluster
+          CLUSTER_ARN=$(aws ecs describe-clusters \
+            --clusters shopsmart-cluster \
+            --query "clusters[0].clusterArn" \
+            --output text --region "$AWS_REGION" 2>/dev/null || echo "")
+          if [ -n "$CLUSTER_ARN" ] && [ "$CLUSTER_ARN" != "None" ]; then
+            terraform import aws_ecs_cluster.main "$CLUSTER_ARN" || true
+          fi
+
+          # ECS task definition (latest active revision)
+          TASK_ARN=$(aws ecs describe-task-definition \
+            --task-definition shopsmart-backend \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text --region "$AWS_REGION" 2>/dev/null || echo "")
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            terraform import aws_ecs_task_definition.backend "$TASK_ARN" || true
+          fi
+
+          # ECS service
+          SERVICE_ARN=$(aws ecs describe-services \
+            --cluster shopsmart-cluster \
+            --services shopsmart-backend \
+            --query "services[0].serviceArn" \
+            --output text --region "$AWS_REGION" 2>/dev/null || echo "")
+          if [ -n "$SERVICE_ARN" ] && [ "$SERVICE_ARN" != "None" ]; then
+            terraform import aws_ecs_service.backend "$SERVICE_ARN" || true
+          fi
+
       - name: Terraform Plan
         run: terraform plan -var="aws_region=${{ secrets.AWS_REGION || 'us-east-1' }}"
         env:
