@@ -75,7 +75,10 @@ function App() {
   const handleCheckout = () => {
     if (cart.length === 0) return;
 
-    const items = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+    const items = cart.map((item) => ({
+      id: item.id,
+      quantity: item.quantity,
+    }));
 
     fetch(`${apiUrl}/api/checkout`, {
       method: 'POST',
@@ -122,17 +125,16 @@ function App() {
 
       {/* Cart Overlay */}
       {cartOpen && (
-        <div
-          className="cart-overlay"
-          onClick={() => setCartOpen(false)}
-        />
+        <div className="cart-overlay" onClick={() => setCartOpen(false)} />
       )}
 
       {/* Cart Panel */}
       <div className={`cart-panel ${cartOpen ? 'cart-panel--open' : ''}`}>
         <div className="cart-header">
           <h3>Your Cart {cartCount > 0 && `(${cartCount})`}</h3>
-          <button className="cart-close-btn" onClick={() => setCartOpen(false)}>✕</button>
+          <button className="cart-close-btn" onClick={() => setCartOpen(false)}>
+            ✕
+          </button>
         </div>
 
         {cart.length === 0 ? (
@@ -142,16 +144,35 @@ function App() {
             <ul className="cart-list">
               {cart.map((item) => (
                 <li key={item.id} className="cart-item">
-                  <img src={item.image} alt={item.name} className="cart-item-img" />
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="cart-item-img"
+                  />
                   <div className="cart-item-info">
                     <span className="cart-item-name">{item.name}</span>
                     <span className="cart-item-price">${item.price}</span>
                   </div>
                   <div className="cart-item-controls">
-                    <button className="qty-btn" onClick={() => updateQty(item.id, -1)}>−</button>
+                    <button
+                      className="qty-btn"
+                      onClick={() => updateQty(item.id, -1)}
+                    >
+                      −
+                    </button>
                     <span className="qty-num">{item.quantity}</span>
-                    <button className="qty-btn" onClick={() => updateQty(item.id, 1)}>+</button>
-                    <button className="remove-btn" onClick={() => removeFromCart(item.id)}>✕</button>
+                    <button
+                      className="qty-btn"
+                      onClick={() => updateQty(item.id, 1)}
+                    >
+                      +
+                    </button>
+                    <button
+                      className="remove-btn"
+                      onClick={() => removeFromCart(item.id)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 </li>
               ))}
@@ -184,7 +205,8 @@ function App() {
             Future of <span className="gradient-text">Shopping</span>
           </h1>
           <p className="hero-subtitle">
-            Discover premium tech with an elegant, streamlined checkout experience.
+            Discover premium tech with an elegant, streamlined checkout
+            experience.
           </p>
           <a href="#discover" className="primary-btn">
             Explore Collection
@@ -211,7 +233,9 @@ function App() {
       <section className="product-showcase" id="discover">
         <div className="section-header">
           <h2>Trending Devices</h2>
-          <span className="product-count">{filteredProducts.length} products</span>
+          <span className="product-count">
+            {filteredProducts.length} products
+          </span>
         </div>
 
         {loading ? (
