@@ -32,12 +32,41 @@ resource "aws_cloudwatch_log_group" "backend" {
   retention_in_days = 7
 }
 
-# Security group for ECS Fargate tasks
+# Security group for ALB (port 80 from internet)
+resource "aws_security_group" "alb" {
+  name        = "shopsmart-alb-sg"
+  description = "ShopSmart ALB"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Security group for ECS tasks (port 5001 from ALB)
 resource "aws_security_group" "backend" {
   name        = "shopsmart-backend-sg"
   description = "ShopSmart backend ECS tasks"
   vpc_id      = data.aws_vpc.default.id
 
+  ingress {
+    from_port       = 5001
+    to_port         = 5001
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # Allow direct access too (for health checks during deploy)
   ingress {
     from_port   = 5001
     to_port     = 5001
@@ -50,6 +79,45 @@ resource "aws_security_group" "backend" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Application Load Balancer
+resource "aws_lb" "backend" {
+  name               = "shopsmart-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = data.aws_subnets.default.ids
+}
+
+# Target Group — ECS tasks register here
+resource "aws_lb_target_group" "backend" {
+  name        = "shopsmart-tg"
+  port        = 5001
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.default.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/api/health"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    matcher             = "200"
+  }
+}
+
+# ALB Listener — HTTP:80 → target group
+resource "aws_lb_listener" "backend" {
+  load_balancer_arn = aws_lb.backend.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
   }
 }
 
@@ -102,7 +170,7 @@ resource "aws_ecs_task_definition" "backend" {
   }])
 }
 
-# ECS Fargate Service
+# ECS Fargate Service — connected to ALB
 resource "aws_ecs_service" "backend" {
   name            = "shopsmart-backend"
   cluster         = aws_ecs_cluster.main.id
@@ -115,6 +183,14 @@ resource "aws_ecs_service" "backend" {
     security_groups  = [aws_security_group.backend.id]
     assign_public_ip = true
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.backend.arn
+    container_name   = "shopsmart-backend"
+    container_port   = 5001
+  }
+
+  depends_on = [aws_lb_listener.backend]
 
   lifecycle {
     ignore_changes = [task_definition, desired_count]

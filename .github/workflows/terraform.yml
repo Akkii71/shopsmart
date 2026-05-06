@@ -50,65 +50,133 @@ jobs:
           BUCKET="shopsmart-frontend-${ACCOUNT_ID}"
           echo "Account: $ACCOUNT_ID  Bucket: $BUCKET"
 
-          # S3
+          # ── S3 ────────────────────────────────────────────
           terraform import aws_s3_bucket.frontend "$BUCKET" || true
           terraform import aws_s3_bucket_versioning.frontend "$BUCKET" || true
           terraform import aws_s3_bucket_server_side_encryption_configuration.frontend "$BUCKET" || true
           terraform import aws_s3_bucket_public_access_block.frontend "$BUCKET" || true
+          terraform import aws_s3_bucket_website_configuration.frontend "$BUCKET" || true
+          terraform import aws_s3_bucket_policy.frontend "$BUCKET" || true
 
-          # ECR
+          # ── ECR ───────────────────────────────────────────
           terraform import aws_ecr_repository.backend shopsmart-backend || true
 
-          # CloudWatch log group
+          # ── CloudWatch ────────────────────────────────────
           terraform import aws_cloudwatch_log_group.backend /ecs/shopsmart-backend || true
 
-          # Security group — look up by name
+          # ── Security Groups ───────────────────────────────
           SG_ID=$(aws ec2 describe-security-groups \
             --filters "Name=group-name,Values=shopsmart-backend-sg" \
             --query "SecurityGroups[0].GroupId" --output text \
             --region "$AWS_REGION" 2>/dev/null || true)
-          echo "SG_ID=$SG_ID"
+          echo "Backend SG: $SG_ID"
           if [[ "$SG_ID" == sg-* ]]; then
             terraform import aws_security_group.backend "$SG_ID" || true
           fi
 
-          # ECS cluster — look up ARN
+          ALB_SG_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=shopsmart-alb-sg" \
+            --query "SecurityGroups[0].GroupId" --output text \
+            --region "$AWS_REGION" 2>/dev/null || true)
+          echo "ALB SG: $ALB_SG_ID"
+          if [[ "$ALB_SG_ID" == sg-* ]]; then
+            terraform import aws_security_group.alb "$ALB_SG_ID" || true
+          fi
+
+          # ── ALB ───────────────────────────────────────────
+          ALB_ARN=$(aws elbv2 describe-load-balancers \
+            --names shopsmart-alb \
+            --query "LoadBalancers[0].LoadBalancerArn" --output text \
+            --region "$AWS_REGION" 2>/dev/null || true)
+          echo "ALB ARN: $ALB_ARN"
+          if [[ "$ALB_ARN" == arn:* ]]; then
+            terraform import aws_lb.backend "$ALB_ARN" || true
+          fi
+
+          # ── Target Group ──────────────────────────────────
+          TG_ARN=$(aws elbv2 describe-target-groups \
+            --names shopsmart-tg \
+            --query "TargetGroups[0].TargetGroupArn" --output text \
+            --region "$AWS_REGION" 2>/dev/null || true)
+          echo "TG ARN: $TG_ARN"
+          if [[ "$TG_ARN" == arn:* ]]; then
+            terraform import aws_lb_target_group.backend "$TG_ARN" || true
+          fi
+
+          # ── ALB Listener ──────────────────────────────────
+          if [[ "$ALB_ARN" == arn:* ]]; then
+            LISTENER_ARN=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "$ALB_ARN" \
+              --query "Listeners[0].ListenerArn" --output text \
+              --region "$AWS_REGION" 2>/dev/null || true)
+            echo "Listener ARN: $LISTENER_ARN"
+            if [[ "$LISTENER_ARN" == arn:* ]]; then
+              terraform import aws_lb_listener.backend "$LISTENER_ARN" || true
+            fi
+          fi
+
+          # ── ECS Cluster ───────────────────────────────────
           CLUSTER_ARN=$(aws ecs describe-clusters \
             --clusters shopsmart-cluster \
             --query "clusters[0].clusterArn" --output text \
             --region "$AWS_REGION" 2>/dev/null || true)
-          echo "CLUSTER_ARN=$CLUSTER_ARN"
+          echo "Cluster ARN: $CLUSTER_ARN"
           if [[ "$CLUSTER_ARN" == arn:* ]]; then
             terraform import aws_ecs_cluster.main "$CLUSTER_ARN" || true
           fi
 
-          # ECS task definition — latest revision
+          # ── ECS Task Definition ───────────────────────────
           TASK_ARN=$(aws ecs describe-task-definition \
             --task-definition shopsmart-backend \
             --query "taskDefinition.taskDefinitionArn" --output text \
             --region "$AWS_REGION" 2>/dev/null || true)
-          echo "TASK_ARN=$TASK_ARN"
+          echo "Task ARN: $TASK_ARN"
           if [[ "$TASK_ARN" == arn:* ]]; then
             terraform import aws_ecs_task_definition.backend "$TASK_ARN" || true
           fi
 
-          # ECS service — handle ACTIVE/INACTIVE
+          # ── ECS Service ───────────────────────────────────
+          # If the service exists WITHOUT an ALB we must delete + recreate it.
+          # If it already has an ALB we can simply import it.
           SERVICE_STATUS=$(aws ecs describe-services \
             --cluster shopsmart-cluster \
             --services shopsmart-backend \
             --query "services[0].status" --output text \
             --region "$AWS_REGION" 2>/dev/null || true)
-          echo "ECS service status=$SERVICE_STATUS"
+          echo "ECS service status: $SERVICE_STATUS"
 
           if [ "$SERVICE_STATUS" = "ACTIVE" ]; then
-            terraform import aws_ecs_service.backend "shopsmart-cluster/shopsmart-backend" || true
+            HAS_LB=$(aws ecs describe-services \
+              --cluster shopsmart-cluster \
+              --services shopsmart-backend \
+              --query "length(services[0].loadBalancers)" --output text \
+              --region "$AWS_REGION" 2>/dev/null || echo "0")
+            echo "Load balancers attached: $HAS_LB"
+
+            if [[ "$HAS_LB" =~ ^[1-9] ]]; then
+              echo "Service already has ALB — importing..."
+              terraform import aws_ecs_service.backend "shopsmart-cluster/shopsmart-backend" || true
+            else
+              echo "Service has NO ALB — deleting so Terraform can recreate with ALB..."
+              terraform state rm aws_ecs_service.backend || true
+              aws ecs delete-service --cluster shopsmart-cluster \
+                --service shopsmart-backend --force --region "$AWS_REGION" || true
+              echo "Waiting for service to drain..."
+              for i in $(seq 1 18); do
+                STATUS=$(aws ecs describe-services --cluster shopsmart-cluster \
+                  --services shopsmart-backend --query "services[0].status" \
+                  --output text --region "$AWS_REGION" 2>/dev/null || echo "None")
+                echo "  ($i/18) status=$STATUS"
+                [ "$STATUS" = "INACTIVE" ] && echo "  Service drained." && break
+                sleep 10
+              done
+            fi
           elif [ "$SERVICE_STATUS" = "INACTIVE" ]; then
-            echo "Service is INACTIVE — deleting so Terraform can re-create cleanly"
-            aws ecs delete-service --cluster shopsmart-cluster \
-              --service shopsmart-backend --force --region "$AWS_REGION" || true
+            echo "Service is INACTIVE — removing from state so Terraform creates fresh..."
+            terraform state rm aws_ecs_service.backend || true
           fi
 
-          echo "--- state after imports ---"
+          echo "--- Terraform state after imports ---"
           terraform state list || true
 
       - name: Terraform Plan

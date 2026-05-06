@@ -1,0 +1,98 @@
+name: Phase 4 - Frontend Deploy to S3
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-frontend:
+    name: Build React and Deploy to S3
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Wait for ALB to be ready
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        run: |
+          echo "Waiting for ALB (shopsmart-alb) to be available..."
+          for i in $(seq 1 20); do
+            ALB_DNS=$(aws elbv2 describe-load-balancers \
+              --names shopsmart-alb \
+              --query "LoadBalancers[0].DNSName" \
+              --output text --region "$AWS_REGION" 2>/dev/null || true)
+            if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+              echo "ALB ready: $ALB_DNS"
+              echo "ALB_DNS=$ALB_DNS" >> $GITHUB_ENV
+              break
+            fi
+            echo "Attempt $i/20 — ALB not ready yet, retrying in 30s..."
+            sleep 30
+          done
+          if [ -z "$ALB_DNS" ] || [ "$ALB_DNS" = "None" ]; then
+            echo "ERROR: ALB not found after waiting. Run Terraform Phase 2 first."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./client
+        run: npm install --legacy-peer-deps
+
+      - name: Build React app
+        working-directory: ./client
+        env:
+          VITE_API_URL: http://${{ env.ALB_DNS }}
+        run: npm run build
+
+      - name: Get S3 bucket name
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "BUCKET=shopsmart-frontend-${ACCOUNT_ID}" >> $GITHUB_ENV
+
+      - name: Deploy to S3
+        run: |
+          # Upload everything except index.html (with long cache)
+          aws s3 sync client/dist/ s3://${{ env.BUCKET }}/ \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "max-age=31536000,public,immutable"
+
+          # Upload index.html with no-cache so users always get the latest
+          aws s3 cp client/dist/index.html s3://${{ env.BUCKET }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
+
+      - name: Print live URLs
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "  ShopSmart is LIVE on AWS!"
+          echo "=========================================="
+          echo ""
+          echo "  Frontend (S3):  http://${{ env.BUCKET }}.s3-website-${AWS_REGION}.amazonaws.com"
+          echo "  Backend  (ALB): http://${{ env.ALB_DNS }}"
+          echo "  Health check:   http://${{ env.ALB_DNS }}/api/health"
+          echo ""
+          echo "=========================================="

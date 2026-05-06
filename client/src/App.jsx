@@ -8,6 +8,7 @@ function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checkoutMsg, setCheckoutMsg] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
@@ -28,6 +29,13 @@ function App() {
       .catch(() => setLoading(false));
   }, [apiUrl]);
 
+  const categories = ['All', ...new Set(products.map((p) => p.category))];
+
+  const filteredProducts =
+    activeCategory === 'All'
+      ? products
+      : products.filter((p) => p.category === activeCategory);
+
   const addToCart = (product) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
@@ -40,6 +48,18 @@ function App() {
       }
       return [...prev, { ...product, quantity: 1 }];
     });
+  };
+
+  const updateQty = (productId, delta) => {
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId
+            ? { ...item, quantity: item.quantity + delta }
+            : item,
+        )
+        .filter((item) => item.quantity > 0),
+    );
   };
 
   const removeFromCart = (productId) => {
@@ -55,10 +75,7 @@ function App() {
   const handleCheckout = () => {
     if (cart.length === 0) return;
 
-    const items = cart.map((item) => ({
-      id: item.id,
-      quantity: item.quantity,
-    }));
+    const items = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
 
     fetch(`${apiUrl}/api/checkout`, {
       method: 'POST',
@@ -89,7 +106,7 @@ function App() {
             {systemStatus ? (
               <span className="online">● System Online</span>
             ) : (
-              <span className="offline">● Booting up</span>
+              <span className="offline">● Offline</span>
             )}
           </div>
           <button
@@ -103,45 +120,59 @@ function App() {
         </div>
       </nav>
 
-      {/* Cart Panel */}
+      {/* Cart Overlay */}
       {cartOpen && (
-        <div className="cart-panel">
-          <h3>Your Cart</h3>
-          {cart.length === 0 ? (
-            <p className="cart-empty">Your cart is empty.</p>
-          ) : (
-            <>
-              <ul className="cart-list">
-                {cart.map((item) => (
-                  <li key={item.id} className="cart-item">
-                    <span>{item.name}</span>
-                    <span>
-                      x{item.quantity} — ${item.price * item.quantity}
-                    </span>
-                    <button
-                      className="remove-btn"
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="cart-footer">
-                <strong>Total: ${cartTotal}</strong>
-                <button className="primary-btn" onClick={handleCheckout}>
-                  Checkout
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <div
+          className="cart-overlay"
+          onClick={() => setCartOpen(false)}
+        />
       )}
+
+      {/* Cart Panel */}
+      <div className={`cart-panel ${cartOpen ? 'cart-panel--open' : ''}`}>
+        <div className="cart-header">
+          <h3>Your Cart {cartCount > 0 && `(${cartCount})`}</h3>
+          <button className="cart-close-btn" onClick={() => setCartOpen(false)}>✕</button>
+        </div>
+
+        {cart.length === 0 ? (
+          <p className="cart-empty">Your cart is empty.</p>
+        ) : (
+          <>
+            <ul className="cart-list">
+              {cart.map((item) => (
+                <li key={item.id} className="cart-item">
+                  <img src={item.image} alt={item.name} className="cart-item-img" />
+                  <div className="cart-item-info">
+                    <span className="cart-item-name">{item.name}</span>
+                    <span className="cart-item-price">${item.price}</span>
+                  </div>
+                  <div className="cart-item-controls">
+                    <button className="qty-btn" onClick={() => updateQty(item.id, -1)}>−</button>
+                    <span className="qty-num">{item.quantity}</span>
+                    <button className="qty-btn" onClick={() => updateQty(item.id, 1)}>+</button>
+                    <button className="remove-btn" onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="cart-footer">
+              <div className="cart-total">
+                <span>Total</span>
+                <strong>${cartTotal}</strong>
+              </div>
+              <button className="checkout-btn" onClick={handleCheckout}>
+                Place Order →
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Checkout message */}
       {checkoutMsg && (
         <div className="checkout-msg">
-          {checkoutMsg}
+          <span>✓ {checkoutMsg}</span>
           <button onClick={() => setCheckoutMsg('')}>✕</button>
         </div>
       )}
@@ -153,46 +184,62 @@ function App() {
             Future of <span className="gradient-text">Shopping</span>
           </h1>
           <p className="hero-subtitle">
-            Discover premium tech with an elegant, streamlined checkout
-            experience.
+            Discover premium tech with an elegant, streamlined checkout experience.
           </p>
-          <button className="primary-btn" onClick={() => setCartOpen(false)}>
+          <a href="#discover" className="primary-btn">
             Explore Collection
-          </button>
+          </a>
         </div>
       </header>
+
+      {/* Category Filter */}
+      <section id="categories" className="category-section">
+        <div className="category-filters">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              className={`category-btn ${activeCategory === cat ? 'category-btn--active' : ''}`}
+              onClick={() => setActiveCategory(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* Product Showcase */}
       <section className="product-showcase" id="discover">
         <div className="section-header">
           <h2>Trending Devices</h2>
-          <button className="text-btn">View All →</button>
+          <span className="product-count">{filteredProducts.length} products</span>
         </div>
 
         {loading ? (
           <p className="loading-msg">Loading products...</p>
         ) : (
           <div className="product-grid">
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <div className="product-card" key={product.id}>
                 <div className="product-image">
                   <img src={product.image} alt={product.name} />
-                  <button
-                    className="add-to-cart"
-                    onClick={() => addToCart(product)}
-                    disabled={!product.inStock}
-                    aria-label={`Add ${product.name} to cart`}
-                  >
-                    {product.inStock ? '+' : '✕'}
-                  </button>
+                  {!product.inStock && (
+                    <div className="sold-out-badge">Sold Out</div>
+                  )}
                 </div>
                 <div className="product-info">
                   <span className="product-category">{product.category}</span>
                   <h3 className="product-name">{product.name}</h3>
-                  <span className="product-price">${product.price}</span>
-                  {!product.inStock && (
-                    <span className="out-of-stock">Out of stock</span>
-                  )}
+                  <div className="product-footer">
+                    <span className="product-price">${product.price}</span>
+                    <button
+                      className={`add-to-cart-btn ${!product.inStock ? 'add-to-cart-btn--disabled' : ''}`}
+                      onClick={() => product.inStock && addToCart(product)}
+                      disabled={!product.inStock}
+                      aria-label={`Add ${product.name} to cart`}
+                    >
+                      {product.inStock ? 'Add to Cart' : 'Sold Out'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
