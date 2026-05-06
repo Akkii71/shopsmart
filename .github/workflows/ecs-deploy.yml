@@ -54,6 +54,28 @@ jobs:
           docker push $ECR_REGISTRY/shopsmart-backend:latest
           echo "image=$ECR_REGISTRY/shopsmart-backend:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Wait for ECS service to be ACTIVE
+        run: |
+          echo "Waiting for ECS service to be ACTIVE (Terraform may still be creating it)..."
+          for i in $(seq 1 24); do
+            STATUS=$(aws ecs describe-services \
+              --cluster shopsmart-cluster \
+              --services shopsmart-backend \
+              --query "services[0].status" \
+              --output text \
+              --region ${{ secrets.AWS_REGION || 'us-east-1' }} 2>/dev/null || echo "None")
+            echo "Attempt $i/24 — service status: $STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then
+              echo "Service is ACTIVE, proceeding with deploy."
+              break
+            fi
+            sleep 15
+          done
+          if [ "$STATUS" != "ACTIVE" ]; then
+            echo "ERROR: Service never became ACTIVE after 6 minutes."
+            exit 1
+          fi
+
       - name: Deploy to ECS Fargate
         run: |
           aws ecs update-service \
