@@ -95,8 +95,12 @@ body {
   border: 1px solid var(--border);
 }
 
-.online { color: var(--success); }
-.offline { color: var(--danger); }
+.online {
+  color: var(--success);
+}
+.offline {
+  color: var(--danger);
+}
 
 .cart-btn {
   background: var(--accent-gradient);
@@ -110,7 +114,9 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: opacity 0.2s, transform 0.15s;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
 }
 
 .cart-btn:hover {
@@ -176,7 +182,7 @@ body {
 }
 
 .cart-close-btn {
-  background: rgba(255,255,255,0.07);
+  background: rgba(255, 255, 255, 0.07);
   border: none;
   color: var(--text-secondary);
   width: 32px;
@@ -184,11 +190,13 @@ body {
   border-radius: 8px;
   cursor: pointer;
   font-size: 0.9rem;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .cart-close-btn:hover {
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
@@ -255,7 +263,7 @@ body {
 }
 
 .qty-btn {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border: none;
   color: var(--text-primary);
   width: 26px;
@@ -270,7 +278,7 @@ body {
 }
 
 .qty-btn:hover {
-  background: rgba(255,255,255,0.16);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .qty-num {
@@ -292,7 +300,9 @@ body {
   transition: opacity 0.15s;
 }
 
-.remove-btn:hover { opacity: 1; }
+.remove-btn:hover {
+  opacity: 1;
+}
 
 .cart-footer {
   padding: 1.25rem 1.5rem;
@@ -324,7 +334,9 @@ body {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
 }
 
 .checkout-btn:hover {
@@ -403,7 +415,9 @@ body {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .primary-btn:hover {
@@ -423,7 +437,7 @@ body {
 }
 
 .category-btn {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   padding: 0.45rem 1rem;
@@ -435,7 +449,7 @@ body {
 }
 
 .category-btn:hover {
-  background: rgba(255,255,255,0.09);
+  background: rgba(255, 255, 255, 0.09);
   color: var(--text-primary);
 }
 
@@ -479,7 +493,10 @@ body {
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--border);
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
   display: flex;
   flex-direction: column;
 }
@@ -487,7 +504,7 @@ body {
 .product-card:hover {
   transform: translateY(-6px);
   border-color: rgba(99, 102, 241, 0.45);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
 }
 
 .product-image {
@@ -511,7 +528,7 @@ body {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  background: rgba(239,68,68,0.9);
+  background: rgba(239, 68, 68, 0.9);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -566,7 +583,9 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
 }
 
 .add-to-cart-btn:hover {
@@ -575,7 +594,7 @@ body {
 }
 
 .add-to-cart-btn--disabled {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
   cursor: not-allowed;
 }
